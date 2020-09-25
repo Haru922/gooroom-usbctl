@@ -4,7 +4,7 @@
 #include "gooroom-usbctl-application.h"
 
 int
-main (int argc,
+main (int   argc,
       char *argv[])
 {
   int status;

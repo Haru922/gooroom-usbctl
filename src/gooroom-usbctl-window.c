@@ -29,6 +29,7 @@ struct _GooroomUsbctlAppWindowPrivate
   GtkWidget *reg_title_label;
   GtkWidget *reg_info_grid;
   GtkWidget *reg_name_value_entry;
+  GtkWidget *reg_name_value_buffer;
   GtkWidget *reg_product_value_label;
   GtkWidget *reg_size_value_label;
   GtkWidget *reg_vendor_value_label;
@@ -121,7 +122,7 @@ hide_new_usb_info (gpointer user_data)
 
   priv = gooroom_usbctl_app_window_get_instance_private (GOOROOM_USBCTL_APP_WINDOW (user_data));
 
-  gtk_entry_set_text (GTK_ENTRY (priv->reg_name_value_entry), "NO NAME");
+  gtk_entry_set_text (GTK_ENTRY (priv->reg_name_value_entry), "");
   gtk_widget_hide (priv->reg_name_value_entry);
   gtk_widget_hide (priv->reg_product_value_label);
   gtk_widget_hide (priv->reg_size_value_label);
@@ -180,7 +181,6 @@ timeout_handler (GooroomUsbctlAppWindow *win)
     gtk_label_set_text (GTK_LABEL (priv->reg_vendor_value_label), new_usb->value[USB_INFO_VENDOR]);
     gtk_label_set_text (GTK_LABEL (priv->reg_serial_value_label), new_usb->value[USB_INFO_SERIAL]);
     gtk_widget_show_all (priv->reg_info_box);
-    gtk_widget_set_sensitive (priv->reg_confirm_button, TRUE);
     gtk_widget_set_focus_on_click (priv->reg_confirm_button, TRUE);
     reg_reset (win);
   }
@@ -227,6 +227,7 @@ take_new_usb (GDBusConnection *conn,
   {
     new_usb = (usb_info *) calloc (1, sizeof (usb_info));
     login_id = g_strdup (msg_field[USB_SIGNAL_LOGIN_ID]);
+    new_usb->value[USB_INFO_NAME] = NULL;
     new_usb->value[USB_INFO_PRODUCT] = g_strdup (msg_field[USB_SIGNAL_USB_PRODUCT]);
     new_usb->value[USB_INFO_SIZE] = g_strdup (msg_field[USB_SIGNAL_USB_SIZE]);
     new_usb->value[USB_INFO_VENDOR] = g_strdup (msg_field[USB_SIGNAL_USB_VENDOR]);
@@ -267,6 +268,35 @@ waiting_usb_signal (void)
                                                    take_new_usb,
                                                    NULL,
                                                    NULL);
+}
+
+static void
+entry_buffer_deleted (GtkEntryBuffer *buffer,
+                       guint          position,
+                       guint          n_chars,
+                       gpointer       user_data)
+{
+  GooroomUsbctlAppWindowPrivate *priv;
+
+  priv = gooroom_usbctl_app_window_get_instance_private (GOOROOM_USBCTL_APP_WINDOW (user_data));
+
+  if ((strlen (gtk_entry_buffer_get_text (buffer))) <= 0)
+    gtk_widget_set_sensitive (priv->reg_confirm_button, FALSE);
+}
+
+static void
+entry_buffer_inserted (GtkEntryBuffer *buffer,
+                      guint            position,
+                      char            *chars,
+                      guint            n_chars,
+                      gpointer         user_data)
+{
+  GooroomUsbctlAppWindowPrivate *priv;
+
+  priv = gooroom_usbctl_app_window_get_instance_private (GOOROOM_USBCTL_APP_WINDOW (user_data));
+
+  if ((strlen (gtk_entry_buffer_get_text (buffer))) > 0)
+    gtk_widget_set_sensitive (priv->reg_confirm_button, TRUE);
 }
 
 static void
@@ -657,8 +687,9 @@ gooroom_usbctl_app_window_init (GooroomUsbctlAppWindow *win)
   hide_new_usb_info (win);
   gtk_box_set_homogeneous (GTK_BOX (priv->usbctl_stack_switcher), TRUE);
   gtk_entry_set_alignment (GTK_ENTRY (priv->reg_name_value_entry), 0.5);
-  gtk_entry_set_max_length (GTK_ENTRY (priv->reg_name_value_entry), 14);
-  gtk_entry_set_max_width_chars (GTK_ENTRY (priv->reg_name_value_entry), 14);
+  priv->reg_name_value_buffer = gtk_entry_buffer_new ("", -1);
+  gtk_entry_buffer_set_max_length (GTK_ENTRY_BUFFER (priv->reg_name_value_buffer), 14);
+  gtk_entry_set_buffer (GTK_ENTRY (priv->reg_name_value_entry), GTK_ENTRY_BUFFER (priv->reg_name_value_buffer));
   gdk_rgba_parse (&box_color, "#FFFFFF");
   gtk_widget_override_background_color (priv->reg_info_box, GTK_STATE_FLAG_NORMAL, &box_color);
   gdk_rgba_parse (&label_color, "#EEFFEE");
@@ -676,6 +707,8 @@ gooroom_usbctl_app_window_init (GooroomUsbctlAppWindow *win)
   gtk_widget_hide (priv->reg_timeout_value_label);
   gtk_widget_set_sensitive (priv->reg_confirm_button, FALSE);
   gtk_widget_set_sensitive (priv->reg_cancel_button, FALSE);
+  g_signal_connect (priv->reg_name_value_buffer, "inserted-text", G_CALLBACK (entry_buffer_inserted), win);
+  g_signal_connect (priv->reg_name_value_buffer, "deleted-text", G_CALLBACK (entry_buffer_deleted), win);
   g_signal_connect (priv->reg_new_button, "clicked", G_CALLBACK (reg_new_button_clicked), win);
   g_signal_connect (priv->reg_confirm_button, "clicked", G_CALLBACK (reg_confirm_button_clicked), win);
   g_signal_connect (priv->reg_cancel_button, "clicked", G_CALLBACK (reg_cancel_button_clicked), win);
